@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760">
+  <defs>
+    <style>
+      .box { fill:#ffffff; stroke:#0f766e; stroke-width:2; rx:8; }
+      .title { font:700 22px Arial, sans-serif; fill:#0f3f3a; }
+      .text { font:16px Arial, sans-serif; fill:#1d2522; }
+      .line { stroke:#475569; stroke-width:2; marker-end:url(#arrow); }
+      .rel { font:700 15px Arial, sans-serif; fill:#334155; }
+    </style>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#475569" />
+    </marker>
+  </defs>
+  <rect width="1200" height="760" fill="#f5f7f6"/>
+  <text x="600" y="44" text-anchor="middle" class="title">ERD rút gọn - Web quản lý ký túc xá</text>
+
+  <g transform="translate(80 100)">
+    <rect class="box" width="260" height="130"/>
+    <text x="20" y="32" class="title">User</text>
+    <text x="20" y="64" class="text">id, username, password</text>
+    <text x="20" y="90" class="text">role, studentId</text>
+  </g>
+  <g transform="translate(470 100)">
+    <rect class="box" width="260" height="160"/>
+    <text x="20" y="32" class="title">Student</text>
+    <text x="20" y="64" class="text">id, code, name, className</text>
+    <text x="20" y="90" class="text">phone, email, roomId</text>
+    <text x="20" y="116" class="text">monthlyRent, utilityDebt</text>
+  </g>
+  <g transform="translate(860 100)">
+    <rect class="box" width="260" height="150"/>
+    <text x="20" y="32" class="title">Room</text>
+    <text x="20" y="64" class="text">id, name, building</text>
+    <text x="20" y="90" class="text">capacity, status</text>
+    <text x="20" y="116" class="text">studentIds, facilityIds</text>
+  </g>
+  <g transform="translate(860 390)">
+    <rect class="box" width="260" height="130"/>
+    <text x="20" y="32" class="title">Facility</text>
+    <text x="20" y="64" class="text">id, name</text>
+    <text x="20" y="90" class="text">quantity, condition</text>
+  </g>
+  <g transform="translate(470 390)">
+    <rect class="box" width="260" height="150"/>
+    <text x="20" y="32" class="title">SupportRequest</text>
+    <text x="20" y="64" class="text">id, studentId, roomId</text>
+    <text x="20" y="90" class="text">type, content, status</text>
+    <text x="20" y="116" class="text">createdAt, dueAt</text>
+  </g>
+  <g transform="translate(80 390)">
+    <rect class="box" width="260" height="150"/>
+    <text x="20" y="32" class="title">ParkingTicket</text>
+    <text x="20" y="64" class="text">id, studentId</text>
+    <text x="20" y="90" class="text">vehicleType, plateNumber</text>
+    <text x="20" y="116" class="text">zone, status, validTo</text>
+  </g>
+
+  <line class="line" x1="340" y1="165" x2="470" y2="165"/>
+  <text class="rel" x="383" y="150">1 - 0..1</text>
+  <line class="line" x1="730" y1="180" x2="860" y2="180"/>
+  <text class="rel" x="770" y="165">N - 1</text>
+  <line class="line" x1="990" y1="250" x2="990" y2="390"/>
+  <text class="rel" x="1010" y="325">1 - N</text>
+  <line class="line" x1="600" y1="260" x2="600" y2="390"/>
+  <text class="rel" x="620" y="330">1 - N</text>
+  <line class="line" x1="470" y1="235" x2="340" y2="390"/>
+  <text class="rel" x="365" y="315">1 - N</text>
+</svg>

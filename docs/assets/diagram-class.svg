@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760">
+  <defs><style>
+    .box { fill:#fff; stroke:#2563eb; stroke-width:2; rx:8; }
+    .head { fill:#e0f2fe; stroke:#2563eb; stroke-width:2; }
+    .title { font:700 21px Arial, sans-serif; fill:#1e3a8a; }
+    .text { font:15px Arial, sans-serif; fill:#1d2522; }
+    .line { stroke:#475569; stroke-width:2; }
+  </style></defs>
+  <rect width="1200" height="760" fill="#f8fafc"/>
+  <text x="600" y="44" text-anchor="middle" class="title">Class Diagram rút gọn</text>
+  <g transform="translate(70 95)"><rect class="box" width="310" height="160"/><rect class="head" width="310" height="42"/><text x="18" y="28" class="title">User</text><text x="18" y="72" class="text">+ id, username, password</text><text x="18" y="98" class="text">+ role, studentId</text><text x="18" y="132" class="text">+ isManager()</text></g>
+  <g transform="translate(445 95)"><rect class="box" width="310" height="185"/><rect class="head" width="310" height="42"/><text x="18" y="28" class="title">Student</text><text x="18" y="72" class="text">+ code, name, className</text><text x="18" y="98" class="text">+ roomId, monthlyRent</text><text x="18" y="124" class="text">+ utilityDebt</text><text x="18" y="158" class="text">+ displayCode</text></g>
+  <g transform="translate(820 95)"><rect class="box" width="310" height="185"/><rect class="head" width="310" height="42"/><text x="18" y="28" class="title">Room</text><text x="18" y="72" class="text">+ name, capacity, status</text><text x="18" y="98" class="text">+ studentIds, facilityIds</text><text x="18" y="132" class="text">+ occupancyRate</text><text x="18" y="158" class="text">+ emptySlots</text></g>
+  <g transform="translate(70 405)"><rect class="box" width="310" height="150"/><rect class="head" width="310" height="42"/><text x="18" y="28" class="title">ParkingTicket</text><text x="18" y="72" class="text">+ vehicleType, plateNumber</text><text x="18" y="98" class="text">+ zone, status, validTo</text></g>
+  <g transform="translate(445 405)"><rect class="box" width="310" height="170"/><rect class="head" width="310" height="42"/><text x="18" y="28" class="title">SupportRequest</text><text x="18" y="72" class="text">+ type, content, status</text><text x="18" y="98" class="text">+ createdAt, dueAt</text><text x="18" y="132" class="text">+ isLate</text></g>
+  <g transform="translate(820 405)"><rect class="box" width="310" height="140"/><rect class="head" width="310" height="42"/><text x="18" y="28" class="title">Facility</text><text x="18" y="72" class="text">+ name, quantity</text><text x="18" y="98" class="text">+ condition</text></g>
+  <line class="line" x1="380" y1="175" x2="445" y2="175"/><line class="line" x1="755" y1="175" x2="820" y2="175"/><line class="line" x1="975" y1="280" x2="975" y2="405"/><line class="line" x1="600" y1="280" x2="600" y2="405"/><line class="line" x1="445" y1="230" x2="380" y2="405"/>
+</svg>
