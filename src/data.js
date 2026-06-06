@@ -4,6 +4,7 @@ export const SESSION_KEY = "phenikaa-dormitory-session-v1";
 export const REQUEST_STATUSES = ["Chờ xử lý", "Đang xử lý", "Hoàn thành", "Từ chối"];
 export const PARKING_STATUSES = ["Đang hiệu lực", "Chờ duyệt", "Sắp hết hạn", "Đã hủy"];
 
+// seedData mô phỏng các bảng logic được mô tả trong src/schema.js.
 export const seedData = {
   users: [
     {

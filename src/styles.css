@@ -508,6 +508,16 @@ tr:last-child td {
   min-width: 620px;
 }
 
+
+.operation-message {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid rgba(180, 35, 24, 0.28);
+  border-radius: 8px;
+  background: rgba(180, 35, 24, 0.08);
+  color: var(--danger);
+  font-weight: 800;
+}
 .empty-state {
   margin: 0;
   color: var(--muted);

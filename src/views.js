@@ -66,7 +66,7 @@ export class AppView {
     `;
   }
 
-  renderShell({ user, route, body }) {
+  renderShell({ user, route, body, operationMessage = "" }) {
     const navItems = user.isManager()
       ? [
           ["dashboard", "Tổng quan"],
@@ -111,7 +111,10 @@ export class AppView {
             </div>
             <button class="ghost-button" type="button" data-action="logout">Đăng xuất</button>
           </header>
-          <section class="content-area" data-testid="content-area">${body}</section>
+          <section class="content-area" data-testid="content-area">
+            ${operationMessage ? `<p class="operation-message" role="alert">${escapeHtml(operationMessage)}</p>` : ""}
+            ${body}
+          </section>
         </main>
       </div>
     `;

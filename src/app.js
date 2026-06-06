@@ -1,6 +1,7 @@
-import { LocalStorageRepository, SessionRepository } from "./repository.js";
+﻿import { LocalStorageRepository, SessionRepository } from "./repository.js";
 import { AuthService, DormitoryService, ReportService } from "./services.js";
 import { AppView, managerViews, studentViews } from "./views.js";
+import { assertManager, assertStudent, canAccessRoute, defaultRouteForRole } from "./security.js";
 
 class DormitoryAppController {
   constructor(root) {
@@ -12,12 +13,23 @@ class DormitoryAppController {
     this.view = new AppView(root);
     this.route = "dashboard";
     this.errorMessage = "";
+    this.operationMessage = "";
     this.editing = null;
   }
 
   init() {
     this.repository.ensureSeed();
     this.bindEvents();
+    this.render();
+  }
+
+  runAction(action) {
+    try {
+      action();
+      this.operationMessage = "";
+    } catch (error) {
+      this.operationMessage = error.message;
+    }
     this.render();
   }
 
@@ -28,11 +40,11 @@ class DormitoryAppController {
       event.preventDefault();
 
       if (form.dataset.form === "login") this.handleLogin(form);
-      if (form.dataset.form === "support") this.handleSupportRequest(form);
-      if (form.dataset.form === "parking") this.handleParkingRequest(form);
-      if (form.dataset.form === "student") this.handleStudentSave(form);
-      if (form.dataset.form === "room") this.handleRoomSave(form);
-      if (form.dataset.form === "facility") this.handleFacilitySave(form);
+      if (form.dataset.form === "support") this.runAction(() => this.handleSupportRequest(form));
+      if (form.dataset.form === "parking") this.runAction(() => this.handleParkingRequest(form));
+      if (form.dataset.form === "student") this.runAction(() => this.handleStudentSave(form));
+      if (form.dataset.form === "room") this.runAction(() => this.handleRoomSave(form));
+      if (form.dataset.form === "facility") this.runAction(() => this.handleFacilitySave(form));
     });
 
     document.addEventListener("click", (event) => {
@@ -40,14 +52,13 @@ class DormitoryAppController {
       const actionButton = event.target.closest("[data-action]");
 
       if (routeButton) {
-        this.route = routeButton.dataset.route;
-        this.editing = null;
-        this.render();
+        this.runAction(() => this.navigate(routeButton.dataset.route));
       }
 
       if (actionButton?.dataset.action === "logout") {
         this.authService.logout();
         this.route = "dashboard";
+        this.operationMessage = "";
         this.editing = null;
         this.render();
       }
@@ -56,27 +67,35 @@ class DormitoryAppController {
         this.repository.reset();
         this.route = "dashboard";
         this.errorMessage = "";
+        this.operationMessage = "";
         this.editing = null;
         this.render();
       }
 
       if (actionButton?.dataset.action === "edit-student") {
-        this.editing = { type: "student", id: actionButton.dataset.id };
-        this.render();
+        this.runAction(() => {
+          assertManager(this.authService.getCurrentUser());
+          this.editing = { type: "student", id: actionButton.dataset.id };
+        });
       }
 
       if (actionButton?.dataset.action === "edit-room") {
-        this.editing = { type: "room", id: actionButton.dataset.id };
-        this.render();
+        this.runAction(() => {
+          assertManager(this.authService.getCurrentUser());
+          this.editing = { type: "room", id: actionButton.dataset.id };
+        });
       }
 
       if (actionButton?.dataset.action === "edit-facility") {
-        this.editing = { type: "facility", id: actionButton.dataset.id };
-        this.render();
+        this.runAction(() => {
+          assertManager(this.authService.getCurrentUser());
+          this.editing = { type: "facility", id: actionButton.dataset.id };
+        });
       }
 
       if (actionButton?.dataset.action === "cancel-edit") {
         this.editing = null;
+        this.operationMessage = "";
         this.render();
       }
     });
@@ -84,15 +103,30 @@ class DormitoryAppController {
     document.addEventListener("change", (event) => {
       const target = event.target;
       if (target.dataset.action === "request-status") {
-        this.dormitoryService.updateRequestStatus(target.dataset.id, target.value);
-        this.render();
+        this.runAction(() => {
+          assertManager(this.authService.getCurrentUser());
+          this.dormitoryService.updateRequestStatus(target.dataset.id, target.value);
+        });
       }
 
       if (target.dataset.action === "parking-status") {
-        this.dormitoryService.updateParkingStatus(target.dataset.id, target.value);
-        this.render();
+        this.runAction(() => {
+          assertManager(this.authService.getCurrentUser());
+          this.dormitoryService.updateParkingStatus(target.dataset.id, target.value);
+        });
       }
     });
+  }
+
+  navigate(route) {
+    const user = this.authService.getCurrentUser();
+    if (!canAccessRoute(user, route)) {
+      this.route = defaultRouteForRole(user?.role);
+      this.editing = null;
+      throw new Error("Bạn không có quyền truy cập chức năng này.");
+    }
+    this.route = route;
+    this.editing = null;
   }
 
   handleLogin(form) {
@@ -104,6 +138,7 @@ class DormitoryAppController {
         password: formData.get("password")?.trim(),
       });
       this.errorMessage = "";
+      this.operationMessage = "";
       this.route = user.isManager() ? "dashboard" : "profile";
     } catch (error) {
       this.errorMessage = error.message;
@@ -114,6 +149,7 @@ class DormitoryAppController {
 
   handleSupportRequest(form) {
     const user = this.authService.getCurrentUser();
+    assertStudent(user);
     const student = this.dormitoryService.getStudentForUser(user);
     const formData = new FormData(form);
     this.dormitoryService.createSupportRequest(student, {
@@ -121,11 +157,11 @@ class DormitoryAppController {
       content: formData.get("content")?.trim(),
     });
     form.reset();
-    this.render();
   }
 
   handleParkingRequest(form) {
     const user = this.authService.getCurrentUser();
+    assertStudent(user);
     const student = this.dormitoryService.getStudentForUser(user);
     const formData = new FormData(form);
     this.dormitoryService.createParkingTicket(student, {
@@ -134,10 +170,10 @@ class DormitoryAppController {
       zone: formData.get("zone"),
     });
     form.reset();
-    this.render();
   }
 
   handleStudentSave(form) {
+    assertManager(this.authService.getCurrentUser());
     const payload = this.readForm(form);
     if (payload.id) {
       this.dormitoryService.updateStudent(payload.id, payload);
@@ -146,10 +182,10 @@ class DormitoryAppController {
     }
     this.editing = null;
     form.reset();
-    this.render();
   }
 
   handleRoomSave(form) {
+    assertManager(this.authService.getCurrentUser());
     const payload = this.readForm(form);
     if (payload.id) {
       this.dormitoryService.updateRoom(payload.id, payload);
@@ -158,10 +194,10 @@ class DormitoryAppController {
     }
     this.editing = null;
     form.reset();
-    this.render();
   }
 
   handleFacilitySave(form) {
+    assertManager(this.authService.getCurrentUser());
     const payload = this.readForm(form);
     if (payload.id) {
       this.dormitoryService.updateFacility(payload.id, payload);
@@ -170,7 +206,6 @@ class DormitoryAppController {
     }
     this.editing = null;
     form.reset();
-    this.render();
   }
 
   readForm(form) {
@@ -187,6 +222,10 @@ class DormitoryAppController {
     if (!user) {
       this.view.renderLogin(this.errorMessage);
       return;
+    }
+
+    if (!canAccessRoute(user, this.route)) {
+      this.route = defaultRouteForRole(user.role);
     }
 
     if (user.isManager()) {
@@ -226,7 +265,7 @@ class DormitoryAppController {
 
     const route = bodyByRoute[this.route] ? this.route : "dashboard";
     this.route = route;
-    this.view.renderShell({ user, route, body: bodyByRoute[route]() });
+    this.view.renderShell({ user, route, body: bodyByRoute[route](), operationMessage: this.operationMessage });
   }
 
   renderStudent(user) {
@@ -248,7 +287,7 @@ class DormitoryAppController {
 
     const route = bodyByRoute[this.route] ? this.route : "profile";
     this.route = route;
-    this.view.renderShell({ user, route, body: bodyByRoute[route]() });
+    this.view.renderShell({ user, route, body: bodyByRoute[route](), operationMessage: this.operationMessage });
   }
 }
 

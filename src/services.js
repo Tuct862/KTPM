@@ -1,5 +1,6 @@
-import { PARKING_STATUSES, REQUEST_STATUSES } from "./data.js";
+﻿import { PARKING_STATUSES, REQUEST_STATUSES } from "./data.js";
 import { Facility, ParkingTicket, Room, Student, SupportRequest, User } from "./models.js";
+import { sanitizePayload, sanitizeText } from "./security.js";
 
 const idFromTime = (prefix) => `${prefix}-${Date.now().toString(36).toUpperCase()}`;
 const numberOrZero = (value) => Number(value) || 0;
@@ -9,6 +10,37 @@ const addDays = (date, days) => {
   return next;
 };
 
+const requireText = (value, message) => {
+  const text = sanitizeText(value);
+  if (!text) throw new Error(message);
+  return text;
+};
+
+const requireNonNegative = (value, message) => {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0) throw new Error(message);
+  return number;
+};
+
+const requirePositive = (value, message) => {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) throw new Error(message);
+  return number;
+};
+
+const requireDate = (value, message) => {
+  const text = requireText(value, message);
+  if (Number.isNaN(new Date(text).getTime())) throw new Error(message);
+  return text;
+};
+
+const assertAllowed = (value, allowedValues, message) => {
+  if (!allowedValues.includes(value)) throw new Error(message);
+  return value;
+};
+
+const findById = (items, id) => items.find((item) => item.id === id);
+
 export class RequestFactory {
   static create({ student, type, content }) {
     const now = new Date();
@@ -16,8 +48,8 @@ export class RequestFactory {
       id: idFromTime("REQ"),
       studentId: student.id,
       roomId: student.roomId,
-      type,
-      content,
+      type: requireText(type, "Loại yêu cầu không được để trống."),
+      content: requireText(content, "Nội dung yêu cầu không được để trống."),
       status: "Chờ xử lý",
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
@@ -31,16 +63,17 @@ export class ParkingFactory {
   static create({ student, vehicleType, plateNumber, zone }) {
     const now = new Date();
     const validTo = addDays(now, 30);
+    const safeVehicleType = requireText(vehicleType, "Loại xe không được để trống.");
     return new ParkingTicket({
       id: idFromTime("PX"),
       studentId: student.id,
-      vehicleType,
-      plateNumber,
-      zone,
+      vehicleType: safeVehicleType,
+      plateNumber: requireText(plateNumber, "Biển số không được để trống."),
+      zone: requireText(zone, "Bãi xe không được để trống."),
       status: "Chờ duyệt",
       validFrom: now.toISOString().slice(0, 10),
       validTo: validTo.toISOString().slice(0, 10),
-      monthlyFee: vehicleType === "Xe đạp điện" ? 60000 : 80000,
+      monthlyFee: safeVehicleType === "Xe đạp điện" ? 60000 : 80000,
     });
   }
 }
@@ -59,9 +92,12 @@ export class AuthService {
   }
 
   login({ username, password, role }) {
+    const safeUsername = sanitizeText(username);
+    const safePassword = sanitizeText(password);
+    const safeRole = sanitizeText(role);
     const record = this.repository.find(
       "users",
-      (user) => user.username === username && user.password === password && user.role === role,
+      (user) => user.username === safeUsername && user.password === safePassword && user.role === safeRole,
     );
 
     if (!record) {
@@ -139,29 +175,64 @@ export class DormitoryService {
     return this.getParkingTickets().filter((ticket) => ticket.studentId === studentId);
   }
 
+  normalizeStudentPayload(state, payload, currentStudentId = null) {
+    const safePayload = sanitizePayload(payload);
+    const room = findById(state.rooms, safePayload.roomId);
+    if (!room) throw new Error("Phòng được chọn không tồn tại.");
+
+    const code = requireText(safePayload.code, "Mã sinh viên không được để trống.");
+    const email = requireText(safePayload.email, "Email không được để trống.");
+    const duplicatedCode = state.students.some((student) => student.code === code && student.id !== currentStudentId);
+    if (duplicatedCode) throw new Error("Mã sinh viên đã tồn tại.");
+    const duplicatedEmail = state.students.some((student) => student.email === email && student.id !== currentStudentId);
+    if (duplicatedEmail) throw new Error("Email sinh viên đã tồn tại.");
+
+    const linkedUser = currentStudentId ? state.users.find((user) => user.studentId === currentStudentId) : null;
+    const duplicatedUsername = state.users.some((user) => user.username === code && user.id !== linkedUser?.id);
+    if (duplicatedUsername) throw new Error("Tên đăng nhập theo mã sinh viên đã tồn tại.");
+
+    return {
+      name: requireText(safePayload.name, "Họ tên không được để trống."),
+      code,
+      className: requireText(safePayload.className, "Lớp không được để trống."),
+      birthDate: requireDate(safePayload.birthDate, "Ngày sinh không hợp lệ."),
+      phone: requireText(safePayload.phone, "Số điện thoại không được để trống."),
+      email,
+      hometown: requireText(safePayload.hometown, "Quê quán không được để trống."),
+      roomId: safePayload.roomId,
+      checkInDate: requireDate(safePayload.checkInDate, "Ngày vào KTX không hợp lệ."),
+      monthlyRent: requireNonNegative(safePayload.monthlyRent, "Tiền phòng không được âm."),
+      utilityDebt: requireNonNegative(safePayload.utilityDebt, "Công nợ điện nước không được âm."),
+      loginPassword: sanitizeText(safePayload.loginPassword),
+    };
+  }
+
   createStudent(payload) {
     return this.repository.mutate((state) => {
+      const safePayload = this.normalizeStudentPayload(state, payload);
+      const targetRoom = findById(state.rooms, safePayload.roomId);
+      if (targetRoom.studentIds.length >= targetRoom.capacity) throw new Error("Phòng đã đủ sức chứa.");
+
       const student = new Student({
         id: idFromTime("SV"),
-        name: payload.name,
-        code: payload.code,
-        className: payload.className,
-        birthDate: payload.birthDate,
-        phone: payload.phone,
-        email: payload.email,
-        hometown: payload.hometown,
-        roomId: payload.roomId,
-        checkInDate: payload.checkInDate,
-        monthlyRent: numberOrZero(payload.monthlyRent),
-        utilityDebt: numberOrZero(payload.utilityDebt),
+        name: safePayload.name,
+        code: safePayload.code,
+        className: safePayload.className,
+        birthDate: safePayload.birthDate,
+        phone: safePayload.phone,
+        email: safePayload.email,
+        hometown: safePayload.hometown,
+        roomId: safePayload.roomId,
+        checkInDate: safePayload.checkInDate,
+        monthlyRent: safePayload.monthlyRent,
+        utilityDebt: safePayload.utilityDebt,
       });
       state.students.push(student);
-      const room = state.rooms.find((item) => item.id === student.roomId);
-      if (room && !room.studentIds.includes(student.id)) room.studentIds.push(student.id);
+      targetRoom.studentIds.push(student.id);
       state.users.push({
         id: idFromTime("U"),
         username: student.code,
-        password: payload.loginPassword || "123456",
+        password: safePayload.loginPassword || "123456",
         role: "student",
         studentId: student.id,
         name: student.name,
@@ -175,37 +246,42 @@ export class DormitoryService {
     return this.repository.mutate((state) => {
       const student = state.students.find((item) => item.id === studentId);
       if (!student) throw new Error("Không tìm thấy sinh viên.");
+      const safePayload = this.normalizeStudentPayload(state, payload, studentId);
       const oldRoomId = student.roomId;
+      const targetRoom = findById(state.rooms, safePayload.roomId);
+      if (oldRoomId !== safePayload.roomId && targetRoom.studentIds.length >= targetRoom.capacity) {
+        throw new Error("Phòng mới đã đủ sức chứa.");
+      }
+
       Object.assign(student, {
-        name: payload.name,
-        code: payload.code,
-        className: payload.className,
-        birthDate: payload.birthDate,
-        phone: payload.phone,
-        email: payload.email,
-        hometown: payload.hometown,
-        roomId: payload.roomId,
-        checkInDate: payload.checkInDate,
-        monthlyRent: numberOrZero(payload.monthlyRent),
-        utilityDebt: numberOrZero(payload.utilityDebt),
+        name: safePayload.name,
+        code: safePayload.code,
+        className: safePayload.className,
+        birthDate: safePayload.birthDate,
+        phone: safePayload.phone,
+        email: safePayload.email,
+        hometown: safePayload.hometown,
+        roomId: safePayload.roomId,
+        checkInDate: safePayload.checkInDate,
+        monthlyRent: safePayload.monthlyRent,
+        utilityDebt: safePayload.utilityDebt,
       });
       if (oldRoomId !== student.roomId) {
         const oldRoom = state.rooms.find((item) => item.id === oldRoomId);
-        const newRoom = state.rooms.find((item) => item.id === student.roomId);
         if (oldRoom) oldRoom.studentIds = oldRoom.studentIds.filter((id) => id !== student.id);
-        if (newRoom && !newRoom.studentIds.includes(student.id)) newRoom.studentIds.push(student.id);
+        if (!targetRoom.studentIds.includes(student.id)) targetRoom.studentIds.push(student.id);
       }
       const user = state.users.find((item) => item.studentId === student.id);
       if (user) {
         user.username = student.code;
-        if (payload.loginPassword) user.password = payload.loginPassword;
+        if (safePayload.loginPassword) user.password = safePayload.loginPassword;
         user.name = student.name;
         user.email = student.email;
       } else {
         state.users.push({
           id: idFromTime("U"),
           username: student.code,
-          password: payload.loginPassword || "123456",
+          password: safePayload.loginPassword || "123456",
           role: "student",
           studentId: student.id,
           name: student.name,
@@ -216,48 +292,73 @@ export class DormitoryService {
     });
   }
 
+  normalizeRoomPayload(state, payload, currentRoomId = null) {
+    const safePayload = sanitizePayload(payload);
+    const name = requireText(safePayload.name, "Tên phòng không được để trống.");
+    const duplicatedName = state.rooms.some((room) => room.name === name && room.id !== currentRoomId);
+    if (duplicatedName) throw new Error("Tên phòng đã tồn tại.");
+    const capacity = requirePositive(safePayload.capacity, "Sức chứa phòng phải lớn hơn 0.");
+    const currentRoom = currentRoomId ? findById(state.rooms, currentRoomId) : null;
+    if (currentRoom && capacity < currentRoom.studentIds.length) {
+      throw new Error("Sức chứa không được nhỏ hơn số sinh viên đang ở.");
+    }
+    return {
+      name,
+      building: requireText(safePayload.building, "Tòa nhà không được để trống."),
+      floor: requirePositive(safePayload.floor, "Tầng phải lớn hơn 0."),
+      capacity,
+      status: requireText(safePayload.status, "Trạng thái phòng không được để trống."),
+      monthlyPrice: requireNonNegative(safePayload.monthlyPrice, "Giá phòng không được âm."),
+      electricityKwh: requireNonNegative(safePayload.electricityKwh, "Chỉ số điện không được âm."),
+      waterM3: requireNonNegative(safePayload.waterM3, "Chỉ số nước không được âm."),
+    };
+  }
+
   createRoom(payload) {
-    return this.repository.add(
-      "rooms",
-      new Room({
+    return this.repository.mutate((state) => {
+      const safePayload = this.normalizeRoomPayload(state, payload);
+      const room = new Room({
         id: idFromTime("P"),
-        name: payload.name,
-        building: payload.building,
-        floor: numberOrZero(payload.floor),
-        capacity: numberOrZero(payload.capacity),
-        status: payload.status,
-        monthlyPrice: numberOrZero(payload.monthlyPrice),
+        ...safePayload,
         studentIds: [],
         facilityIds: [],
-        electricityKwh: numberOrZero(payload.electricityKwh),
-        waterM3: numberOrZero(payload.waterM3),
-      }),
-    );
+      });
+      state.rooms.push(room);
+      return room;
+    });
   }
 
   updateRoom(roomId, payload) {
-    return this.repository.update("rooms", roomId, {
-      name: payload.name,
-      building: payload.building,
-      floor: numberOrZero(payload.floor),
-      capacity: numberOrZero(payload.capacity),
-      status: payload.status,
-      monthlyPrice: numberOrZero(payload.monthlyPrice),
-      electricityKwh: numberOrZero(payload.electricityKwh),
-      waterM3: numberOrZero(payload.waterM3),
+    return this.repository.mutate((state) => {
+      const room = findById(state.rooms, roomId);
+      if (!room) throw new Error("Không tìm thấy phòng.");
+      Object.assign(room, this.normalizeRoomPayload(state, payload, roomId));
+      return new Room(room);
     });
+  }
+
+  normalizeFacilityPayload(state, payload) {
+    const safePayload = sanitizePayload(payload);
+    if (!findById(state.rooms, safePayload.roomId)) throw new Error("Phòng gán cơ sở vật chất không tồn tại.");
+    return {
+      name: requireText(safePayload.name, "Tên thiết bị không được để trống."),
+      quantity: requirePositive(safePayload.quantity, "Số lượng thiết bị phải lớn hơn 0."),
+      condition: requireText(safePayload.condition, "Tình trạng thiết bị không được để trống."),
+      roomId: safePayload.roomId,
+    };
   }
 
   createFacility(payload) {
     return this.repository.mutate((state) => {
+      const safePayload = this.normalizeFacilityPayload(state, payload);
       const facility = new Facility({
         id: idFromTime("F"),
-        name: payload.name,
-        quantity: numberOrZero(payload.quantity),
-        condition: payload.condition,
+        name: safePayload.name,
+        quantity: safePayload.quantity,
+        condition: safePayload.condition,
       });
       state.facilities.push(facility);
-      const room = state.rooms.find((item) => item.id === payload.roomId);
+      const room = state.rooms.find((item) => item.id === safePayload.roomId);
       if (room && !room.facilityIds.includes(facility.id)) room.facilityIds.push(facility.id);
       return facility;
     });
@@ -265,48 +366,45 @@ export class DormitoryService {
 
   updateFacility(facilityId, payload) {
     return this.repository.mutate((state) => {
+      const safePayload = this.normalizeFacilityPayload(state, payload);
       const facility = state.facilities.find((item) => item.id === facilityId);
       if (!facility) throw new Error("Không tìm thấy cơ sở vật chất.");
       Object.assign(facility, {
-        name: payload.name,
-        quantity: numberOrZero(payload.quantity),
-        condition: payload.condition,
+        name: safePayload.name,
+        quantity: safePayload.quantity,
+        condition: safePayload.condition,
       });
       for (const room of state.rooms) {
         room.facilityIds = room.facilityIds.filter((id) => id !== facilityId);
       }
-      const targetRoom = state.rooms.find((item) => item.id === payload.roomId);
+      const targetRoom = state.rooms.find((item) => item.id === safePayload.roomId);
       if (targetRoom) targetRoom.facilityIds.push(facilityId);
       return new Facility(facility);
     });
   }
 
   createSupportRequest(student, payload) {
+    if (!student) throw new Error("Không tìm thấy hồ sơ sinh viên để tạo yêu cầu.");
     return this.repository.add("requests", RequestFactory.create({ student, ...payload }));
   }
 
   updateRequestStatus(requestId, status, reply = "") {
-    if (!REQUEST_STATUSES.includes(status)) {
-      throw new Error("Trạng thái yêu cầu không hợp lệ.");
-    }
-
+    const safeStatus = assertAllowed(status, REQUEST_STATUSES, "Trạng thái yêu cầu không hợp lệ.");
     return this.repository.update("requests", requestId, {
-      status,
-      reply,
+      status: safeStatus,
+      reply: sanitizeText(reply),
       updatedAt: new Date().toISOString(),
     });
   }
 
   createParkingTicket(student, payload) {
+    if (!student) throw new Error("Không tìm thấy hồ sơ sinh viên để đăng ký gửi xe.");
     return this.repository.add("parkingTickets", ParkingFactory.create({ student, ...payload }));
   }
 
   updateParkingStatus(ticketId, status) {
-    if (!PARKING_STATUSES.includes(status)) {
-      throw new Error("Trạng thái gửi xe không hợp lệ.");
-    }
-
-    return this.repository.update("parkingTickets", ticketId, { status });
+    const safeStatus = assertAllowed(status, PARKING_STATUSES, "Trạng thái gửi xe không hợp lệ.");
+    return this.repository.update("parkingTickets", ticketId, { status: safeStatus });
   }
 
   getDashboardStats() {

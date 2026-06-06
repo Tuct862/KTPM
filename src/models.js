@@ -1,4 +1,7 @@
-export class User {
+﻿export class User {
+  static entityName = "User";
+  static collectionName = "users";
+
   constructor(record) {
     Object.assign(this, record);
   }
@@ -9,6 +12,9 @@ export class User {
 }
 
 export class Student {
+  static entityName = "Student";
+  static collectionName = "students";
+
   constructor(record) {
     Object.assign(this, record);
   }
@@ -19,6 +25,9 @@ export class Student {
 }
 
 export class Room {
+  static entityName = "Room";
+  static collectionName = "rooms";
+
   constructor(record) {
     Object.assign(this, record);
   }
@@ -33,12 +42,18 @@ export class Room {
 }
 
 export class Facility {
+  static entityName = "Facility";
+  static collectionName = "facilities";
+
   constructor(record) {
     Object.assign(this, record);
   }
 }
 
 export class SupportRequest {
+  static entityName = "SupportRequest";
+  static collectionName = "requests";
+
   constructor(record) {
     Object.assign(this, record);
   }
@@ -49,6 +64,9 @@ export class SupportRequest {
 }
 
 export class ParkingTicket {
+  static entityName = "ParkingTicket";
+  static collectionName = "parkingTickets";
+
   constructor(record) {
     Object.assign(this, record);
   }
